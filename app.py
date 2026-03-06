@@ -442,7 +442,16 @@ async def load_model():
             model_name=config.MODEL_NAME
         )
         
-        # TDT model handles timestamps natively, no special configuration needed
+        # WORKAROUND: Disable CUDA graph decoder due to NeMo 2.6.x incompatibility
+        # with CUDA 12.8+ (cudaStreamGetCaptureInfo API changed its return signature).
+        # See: https://github.com/NVIDIA-NeMo/NeMo/issues/15145
+        # TODO: Re-enable once NeMo releases a fix for this issue.
+        from omegaconf import open_dict
+        decoding_cfg = model.cfg.decoding
+        with open_dict(decoding_cfg):
+            decoding_cfg.greedy.use_cuda_graph_decoder = False
+        model.change_decoding_strategy(decoding_cfg)
+
         logger.info("Model loaded successfully!")
     except Exception as e:
         logger.error(f"Error loading model: {e}")
@@ -503,12 +512,16 @@ async def transcribe(request: TranscribeRequest):
             audio_url_str = urlunparse((parsed.scheme, parsed.netloc, fixed_path, '', '', ''))
             logger.info(f"Fixed URL: {audio_url_str}")
         
+        logger.info(f"Initiating HTTP GET request...")
         response = requests.get(audio_url_str, timeout=600, stream=True, allow_redirects=True)  # 10 min timeout
+        logger.info(f"HTTP response status: {response.status_code}, content-type: {response.headers.get('content-type', 'N/A')}, content-length: {response.headers.get('content-length', 'N/A')}")
         response.raise_for_status()
+        logger.info("HTTP response OK, proceeding to parse file extension...")
         
         # Get file extension from URL or content-type
         url_path = Path(request.audio_url.path)
         file_ext = url_path.suffix.lower()
+        logger.info(f"Detected file extension: '{file_ext}' from URL path: '{request.audio_url.path}'")
         
         if not file_ext or file_ext not in config.ALLOWED_EXTENSIONS:
             # Try to infer from content-type
@@ -530,20 +543,25 @@ async def transcribe(request: TranscribeRequest):
         temp_path = os.path.join(config.TEMP_DIR, f"{int(time.time())}_download{file_ext}")
         
         # Save downloaded content
+        logger.info(f"Saving downloaded content to: {temp_path}")
         with open(temp_path, "wb") as f:
             for chunk in response.iter_content(chunk_size=8192):
                 f.write(chunk)
         
         # Check file size
         file_size = os.path.getsize(temp_path)
+        logger.info(f"Downloaded file size: {file_size / (1024*1024):.2f}MB (limit: {config.MAX_FILE_SIZE_MB}MB)")
         if file_size > config.MAX_FILE_SIZE:
+            logger.error(f"File too large: {file_size / (1024*1024):.2f}MB exceeds {config.MAX_FILE_SIZE_MB}MB limit")
             raise HTTPException(
                 status_code=400,
                 detail=f"File too large. Maximum size: {config.MAX_FILE_SIZE_MB}MB"
             )
         
         # Preprocess audio (convert to mono, resample to 16kHz)
+        logger.info("Starting audio preprocessing...")
         preprocessed_path = preprocess_audio(temp_path)
+        logger.info(f"Audio preprocessed successfully: {preprocessed_path}")
         
         # Check if file should be processed in chunks
         if file_size > config.CHUNK_THRESHOLD:
@@ -654,10 +672,13 @@ async def transcribe(request: TranscribeRequest):
     except requests.RequestException as e:
         logger.error(f"Failed to download audio: {str(e)}")
         raise HTTPException(status_code=400, detail=f"Failed to download audio: {str(e)}")
-    except HTTPException:
+    except HTTPException as e:
+        logger.error(f"HTTPException raised: status_code={e.status_code}, detail={e.detail}")
         raise
     except Exception as e:
-        logger.error(f"Transcription failed: {str(e)}")
+        logger.error(f"Transcription failed ({type(e).__name__}): {str(e)}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"Transcription failed: {str(e)}")
     
     finally:
