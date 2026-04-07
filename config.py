@@ -33,9 +33,9 @@ MAX_FILE_SIZE = MAX_FILE_SIZE_MB * 1024 * 1024  # Convert to bytes
 ALLOWED_EXTENSIONS = {".wav", ".mp3", ".flac", ".ogg", ".m4a"}
 
 # Chunking Configuration
-CHUNK_THRESHOLD_MB = int(os.getenv("CHUNK_THRESHOLD_MB", "50"))
+CHUNK_THRESHOLD_MB = int(os.getenv("CHUNK_THRESHOLD_MB", "30"))
 CHUNK_THRESHOLD = CHUNK_THRESHOLD_MB * 1024 * 1024  # Convert to bytes
-CHUNK_DURATION = int(os.getenv("CHUNK_DURATION", "600"))  # 10 minutes in seconds
+CHUNK_DURATION = int(os.getenv("CHUNK_DURATION", "300"))  # 5 minutes in seconds
 CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "10"))  # 10 seconds overlap
 
 # Segment generation settings (legacy, not used with TDT)

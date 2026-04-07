@@ -1,5 +1,6 @@
-torch>=2.1.0
-torchaudio>=2.1.0
+--extra-index-url https://download.pytorch.org/whl/cu128
+torch==2.11.0+cu128
+torchaudio==2.11.0+cu128
 nemo_toolkit[asr]>=1.22.0
 lhotse>=1.32.0
 fastapi>=0.104.0

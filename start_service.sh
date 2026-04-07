@@ -21,6 +21,9 @@ export CUDA_HOME=/usr/local/cuda
 export PATH=$CUDA_HOME/bin:$PATH
 export LD_LIBRARY_PATH=$CUDA_HOME/lib64:$LD_LIBRARY_PATH
 
+# Pin to GPU 4 (GPUs 0-3 are reserved for MinMax)
+export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-4}
+
 # Redirect HuggingFace and NeMo model downloads to the dedicated data disk
 export HF_HOME=/mnt/hf-cache/huggingface
 export HUGGINGFACE_HUB_CACHE=/mnt/hf-cache/huggingface/hub

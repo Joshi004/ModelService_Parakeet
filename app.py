@@ -16,6 +16,7 @@ from pydantic import BaseModel, HttpUrl
 import requests
 import librosa
 import soundfile as sf
+import torch
 import nemo.collections.asr as nemo_asr
 
 import config
@@ -209,6 +210,8 @@ def process_single_chunk(chunk_path: str, time_offset: float) -> Dict[str, Any]:
         
     except Exception as e:
         logger.error(f"Chunk processing failed: {str(e)}")
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
         raise
 
 
@@ -675,10 +678,17 @@ async def transcribe(request: TranscribeRequest):
     except HTTPException as e:
         logger.error(f"HTTPException raised: status_code={e.status_code}, detail={e.detail}")
         raise
+    except torch.cuda.OutOfMemoryError as e:
+        logger.error(f"Transcription failed (OutOfMemoryError): {str(e)}")
+        torch.cuda.empty_cache()
+        logger.info(f"GPU cache cleared. Memory after cleanup: {torch.cuda.memory_allocated() / (1024**3):.2f} GiB allocated")
+        raise HTTPException(status_code=503, detail="GPU out of memory. Try a shorter audio file or retry shortly.")
     except Exception as e:
         logger.error(f"Transcription failed ({type(e).__name__}): {str(e)}")
         import traceback
         logger.error(f"Traceback: {traceback.format_exc()}")
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
         raise HTTPException(status_code=500, detail=f"Transcription failed: {str(e)}")
     
     finally:
