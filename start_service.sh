@@ -80,5 +80,6 @@ echo ""
 uvicorn app:app \
     --host "$HOST" \
     --port "$PORT" \
+    --workers 5 \
     --log-level info \
     2>&1 | tee "${SCRIPT_DIR}/logs/service.log"
